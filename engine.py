@@ -413,16 +413,6 @@ def summarize_technographic(installs, total_count=None, contract_info=None):
 
 
 def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
-    """
-    Fit score 0-100 con scale continue:
-    - employees (log scale) 0-10
-    - firmographic itSpend (log scale) 0-15
-    - company_spend annual (log scale) 0-15
-    - tech breadth 0-15
-    - technographic intensity (avg) 0-15
-    - cloud spend monthly (log scale) 0-20
-    - functional area coverage (0-10)
-    """
     employees = firmographic.get("employeeCount") or 0
     it_spend = firmographic.get("itSpend") or 0
 
@@ -476,9 +466,6 @@ def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
 
 
 def final_score(fit, badge):
-    """
-    Trigger come boost (timing).
-    """
     boost = 0
     if badge == "Hot":
         boost = 15

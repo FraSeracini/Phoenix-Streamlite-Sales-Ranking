@@ -93,7 +93,7 @@ if st.button("Prioritize"):
     st.dataframe(results)
 
     if use_llm:
-        with st.spinner("Generating sales blurbs with LLM..."):
+        with st.spinner("Generating sales suggestions with LLM..."):
             for r in results:
                 r["llm_blurb"] = llm_sales_blurb(r, openrouter_key)
 
