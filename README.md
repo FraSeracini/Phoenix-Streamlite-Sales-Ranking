@@ -62,12 +62,12 @@ Then open the URL shown in the terminal (e.g. http://localhost:8504).
 ## 🧮 Scoring Details (Current Weights)
 
 ### Fit Score (0–100)
-- **Employee count** (log scale): **0–20**
+- **Employee count** (log scale): **0–10**
 - **Firmographic IT spend** (`itSpend`, log): **0–15**
 - **Company spend** (`company_spend` annual, log): **0–15**
 - **Tech breadth** (# installs): **0–15**
 - **Tech intensity** (avg `intensity`): **0–15**
-- **Cloud monthly spend** (log): **0–10**
+- **Cloud monthly spend** (log): **0–20**
 - **Functional area coverage** (`company_fai`): **0–10**
   - +2 per area (max 10), filtered by keywords: IT, Engineering, Data, Security, Cloud, AI, Machine Learning, ML
 

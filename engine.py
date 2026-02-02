@@ -7,7 +7,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 PHOENIX_URL = "https://phoenix.hginsights.com/api/ai/phx_185c0d78b3d439897dc6e8cd658c2f6765b3c83a834e503e762107198bb4409b/mcp"
-MAX_RESULTS = 50
+MAX_RESULTS = 200
 CLOUD_VENDOR_ALLOWLIST = {
     "Amazon Web Services",
     "AWS",
@@ -50,6 +50,18 @@ def parse_any_date(value):
         return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
     except Exception:
         return None
+
+
+def parse_amount(value):
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.replace("$", "").replace(",", "").strip()
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
+    return None
 
 
 def trigger_badge(installs, contract_info=None):
@@ -173,14 +185,16 @@ def spend_summary(data):
     top_categories = []
     if isinstance(data, dict):
         for key in [
+            "totalSpendAmount",
             "totalSpend",
+            "totalITSpendAmount",
             "totalITSpend",
             "annualSpend",
             "totalAnnualSpend",
             "itSpend",
             "totalItSpend",
         ]:
-            value = data.get(key)
+            value = parse_amount(data.get(key))
             if isinstance(value, (int, float)):
                 annual_spend = max(annual_spend, float(value))
 
@@ -202,9 +216,17 @@ def spend_summary(data):
                     or item.get("name")
                     or item.get("categoryName")
                 )
-                spend = item.get("spend") or item.get("value") or item.get("amount")
-                if name and isinstance(spend, (int, float)):
-                    pairs.append((name, float(spend)))
+                spend = (
+                    item.get("totalSpendAmount")
+                    or item.get("spendAmount")
+                    or item.get("totalSpend")
+                    or item.get("spend")
+                    or item.get("value")
+                    or item.get("amount")
+                )
+                spend_value = parse_amount(spend)
+                if name and isinstance(spend_value, (int, float)):
+                    pairs.append((name, float(spend_value)))
         if pairs:
             pairs.sort(key=lambda x: x[1], reverse=True)
             top_categories = [name for name, _ in pairs[:3]]
@@ -270,14 +292,38 @@ def contract_signal(data):
 
     if not dates:
         return {}
-
-    soonest = min(dates)
-    days = (soonest - datetime.now(timezone.utc)).days
+    now = datetime.now(timezone.utc)
+    future_dates = [dt for dt in dates if dt >= now]
+    if not future_dates:
+        return {}
+    soonest = min(future_dates)
+    days = (soonest - now).days
     return {"daysToRenewal": days}
 
 
 def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai, contract_info):
     reasons = []
+
+    if isinstance(contract_info, dict):
+        days = contract_info.get("daysToRenewal")
+        if isinstance(days, int) and days <= 180:
+            reasons.append(f"Contract renewal window (~{days} days)")
+
+    top_areas = (fai or {}).get("topAreas") or []
+    if top_areas:
+        reasons.append(f"Active in functions: {', '.join(top_areas)}")
+
+    top_categories = (spend or {}).get("topCategories") or []
+    if top_categories:
+        reasons.append(f"Top IT spend areas: {', '.join(top_categories)}")
+
+    top = technographic.get("topTechnologies") or []
+    if top:
+        reasons.append(f"Key stack present: {top[0]}")
+
+    industry = firmographic.get("industry")
+    if industry:
+        reasons.append(f"Industry fit: {industry}")
 
     monthly = (cloud_spend or {}).get("monthlySpend") or 0
     if monthly:
@@ -287,39 +333,17 @@ def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai
     if annual_spend:
         reasons.append(f"IT spend signal (~${annual_spend/1_000_000:.0f}M/yr)")
 
-    top_categories = (spend or {}).get("topCategories") or []
-    if top_categories:
-        reasons.append(f"Top IT spend areas: {', '.join(top_categories)}")
-
-    top_vendors = (cloud_spend or {}).get("topCloudServices") or []
-    if top_vendors:
-        reasons.append(f"Top cloud services: {', '.join(top_vendors)}")
-
-    it_spend = firmographic.get("itSpend") or 0
-    if it_spend:
-        reasons.append(f"High IT spend (~${it_spend/1_000_000:.0f}M/yr)")
-
     badge = technographic.get("badge")
     if badge == "Hot":
         reasons.append("Recent tech verification activity (Hot)")
     elif badge == "Warm":
         reasons.append("Some recent tech activity (Warm)")
 
-    if isinstance(contract_info, dict):
-        days = contract_info.get("daysToRenewal")
-        if isinstance(days, int) and days <= 180:
-            reasons.append(f"Contract renewal window (~{max(days, 0)} days)")
+    top_vendors = (cloud_spend or {}).get("topCloudServices") or []
+    if top_vendors:
+        reasons.append(f"Top cloud services: {', '.join(top_vendors)}")
 
-    if isinstance(fai, dict) and fai.get("areaCount"):
-        top_areas = fai.get("topAreas") or []
-        if top_areas:
-            reasons.append(f"Active in functions: {', '.join(top_areas)}")
-
-    top = technographic.get("topTechnologies") or []
-    if top:
-        reasons.append(f"Key stack present: {top[0]}")
-
-    return reasons[:2]
+    return reasons[:3]
 
 
 def recommended_action(technographic, cloud_spend, contract_info=None):
@@ -357,13 +381,18 @@ def summarize_firmographic(data):
 
 def summarize_technographic(installs, total_count=None, contract_info=None):
     summary = {
-        "count": total_count if isinstance(total_count, int) else (len(installs) if isinstance(installs, list) else None),
+        "count": None,
         "badge": trigger_badge(installs, contract_info),
         "topTechnologies": [],
         "avgIntensity": None,
     }
 
     if isinstance(installs, list):
+        raw_count = len(installs)
+        if isinstance(total_count, int) and total_count >= raw_count:
+            summary["count"] = total_count
+        else:
+            summary["count"] = raw_count
         intensities = []
         for item in installs[:10]:
             if isinstance(item, dict):
@@ -560,7 +589,11 @@ async def prioritize_accounts(domains: list[str]) -> list[dict]:
                     "techCount": technographic.get("count"),
                     "techIntensity": technographic.get("avgIntensity"),
                     "cloudMonthlySpend": (cloud_spend or {}).get("monthlySpend"),
+                    "cloudTopServices": (cloud_spend or {}).get("topCloudServices"),
                     "faiAreas": (fai or {}).get("topAreas"),
+                    "spendTopCategories": (spend or {}).get("topCategories"),
+                    "industry": firmographic.get("industry"),
+                    "topTechnologies": technographic.get("topTechnologies"),
                     "daysToRenewal": days_to_renewal,
                     "reasons": build_reasons(
                         firmographic, technographic, cloud_spend, installs, spend, fai, contract_info

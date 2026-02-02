@@ -37,6 +37,10 @@ SCORING INPUTS:
 - Cloud monthly spend: {account.get('cloudMonthlySpend')}
 - Functional area coverage (FAI): {account.get('faiAreas')}
 - Contract renewal (days): {account.get('daysToRenewal')}
+- Industry: {account.get('industry')}
+- Top technologies: {account.get('topTechnologies')}
+- Cloud top services: {account.get('cloudTopServices')}
+- Spend top categories: {account.get('spendTopCategories')}
 """
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
