@@ -71,14 +71,14 @@ def trigger_badge(installs, contract_info=None):
     if isinstance(contract_info, dict):
         days = contract_info.get("daysToRenewal")
         if isinstance(days, int):
-            if days <= 30:
+            if days <= 60:
                 contract_score = 1.0
-            elif days <= 90:
+            elif days <= 120:
                 contract_score = 0.8
             elif days <= 180:
-                contract_score = 0.5
+                contract_score = 0.6
             elif days <= 365:
-                contract_score = 0.2
+                contract_score = 0.3
 
     best_delta_days = None
 
@@ -109,10 +109,10 @@ def trigger_badge(installs, contract_info=None):
     elif best_delta_days <= 365:
         recency_score = 0.2
 
-    combined = (0.6 * contract_score) + (0.4 * recency_score)
-    if combined >= 0.75:
+    combined = (0.7 * contract_score) + (0.3 * recency_score)
+    if combined >= 0.7:
         return "Hot"
-    if combined >= 0.4:
+    if combined >= 0.35:
         return "Warm"
     return "Cold"
 
@@ -343,7 +343,7 @@ def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai
     if top_vendors:
         reasons.append(f"Top cloud services: {', '.join(top_vendors)}")
 
-    return reasons[:3]
+    return list(dict.fromkeys(reasons))[:3]
 
 
 def recommended_action(technographic, cloud_spend, contract_info=None):

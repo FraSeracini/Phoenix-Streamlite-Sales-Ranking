@@ -19,6 +19,8 @@ Write:
 
 Use ONLY the facts below. Do not invent anything.
 Explicitly reference the scoring inputs (fit + trigger), not just the raw reasons.
+Avoid repeating the same phrasing across accounts; pick different evidence when possible.
+If contract renewal is not imminent, do not lead with it.
 
 FACTS:
 Company: {account.get('company')}
