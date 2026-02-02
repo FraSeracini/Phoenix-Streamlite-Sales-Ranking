@@ -386,12 +386,12 @@ def summarize_technographic(installs, total_count=None, contract_info=None):
 def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
     """
     Fit score 0-100 con scale continue:
-    - employees (log scale) 0-20
+    - employees (log scale) 0-10
     - firmographic itSpend (log scale) 0-15
     - company_spend annual (log scale) 0-15
     - tech breadth 0-15
     - technographic intensity (avg) 0-15
-    - cloud spend monthly (log scale) 0-10
+    - cloud spend monthly (log scale) 0-20
     - functional area coverage (0-10)
     """
     employees = firmographic.get("employeeCount") or 0
@@ -404,7 +404,7 @@ def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
 
         return min(max_points, max_points * (math.log10(value + floor) / math.log10(1_000_000_000)))
 
-    emp_points = log_score(employees, 20)
+    emp_points = log_score(employees, 10)
     spend_points = log_score(it_spend, 15)
 
     annual_spend = 0
@@ -426,7 +426,7 @@ def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
     cloud_monthly = 0
     if isinstance(cloud_spend, dict):
         cloud_monthly = cloud_spend.get("monthlySpend") or 0
-    cloud_points = log_score(cloud_monthly, 10)
+    cloud_points = log_score(cloud_monthly, 20)
 
     fai_points = 0
     if isinstance(fai, dict):
@@ -487,6 +487,9 @@ async def fetch_domain_summary(session, domain):
     )
     (out_dir / f"{domain}_technographic.json").write_text(
         json.dumps(technographic_data, indent=2), encoding="utf-8"
+    )
+    (out_dir / f"{domain}_spend.json").write_text(
+        json.dumps(spend_data, indent=2), encoding="utf-8"
     )
     installs, total_count = infer_installs(technographic_data)
 
