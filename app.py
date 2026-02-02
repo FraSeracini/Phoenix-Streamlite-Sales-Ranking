@@ -21,6 +21,8 @@ Use ONLY the facts below. Do not invent anything.
 Explicitly reference the scoring inputs (fit + trigger), not just the raw reasons.
 Avoid repeating the same phrasing across accounts; pick different evidence when possible.
 If contract renewal is not imminent, do not lead with it.
+Account for weights: fit inputs (employees 10, IT spend 15, company spend 15, tech breadth 15,
+tech intensity 15, cloud monthly spend 20, FAI 10) and trigger mix (contracts 40%, recency 60%).
 
 FACTS:
 Company: {account.get('company')}

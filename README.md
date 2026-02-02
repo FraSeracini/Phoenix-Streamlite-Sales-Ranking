@@ -73,8 +73,8 @@ Then open the URL shown in the terminal (e.g. http://localhost:8504).
 
 ### Trigger Badge (Hot/Warm/Cold)
 The badge uses a **weighted mix**:
-- **60% contract renewal proximity**
-- **40% technographic recency**
+- **40% contract renewal proximity**
+- **60% technographic recency**
 
 **Contract score** (days to renewal):
 - ≤ 30 days → 1.0

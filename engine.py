@@ -109,8 +109,8 @@ def trigger_badge(installs, contract_info=None):
     elif best_delta_days <= 365:
         recency_score = 0.2
 
-    combined = (0.7 * contract_score) + (0.3 * recency_score)
-    if combined >= 0.7:
+    combined = (0.4 * contract_score) + (0.6 * recency_score)
+    if combined >= 0.65:
         return "Hot"
     if combined >= 0.35:
         return "Warm"
