@@ -18,6 +18,7 @@ Write:
 3) A 2-sentence opener email
 
 Use ONLY the facts below. Do not invent anything.
+Explicitly reference the scoring inputs (fit + trigger), not just the raw reasons.
 
 FACTS:
 Company: {account.get('company')}
@@ -26,6 +27,16 @@ Score: {account.get('score')}
 Trigger badge: {account.get('badge')}
 Reasons (raw): {account.get('reasons')}
 Action (raw): {account.get('action')}
+
+SCORING INPUTS:
+- Employee count: {account.get('employeeCount')}
+- Firmographic IT spend: {account.get('itSpend')}
+- Company spend (annual): {account.get('companySpendAnnual')}
+- Tech breadth (# installs): {account.get('techCount')}
+- Tech intensity (avg): {account.get('techIntensity')}
+- Cloud monthly spend: {account.get('cloudMonthlySpend')}
+- Functional area coverage (FAI): {account.get('faiAreas')}
+- Contract renewal (days): {account.get('daysToRenewal')}
 """
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}

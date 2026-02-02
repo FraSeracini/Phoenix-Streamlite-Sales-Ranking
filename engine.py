@@ -360,9 +360,11 @@ def summarize_technographic(installs, total_count=None, contract_info=None):
         "count": total_count if isinstance(total_count, int) else (len(installs) if isinstance(installs, list) else None),
         "badge": trigger_badge(installs, contract_info),
         "topTechnologies": [],
+        "avgIntensity": None,
     }
 
     if isinstance(installs, list):
+        intensities = []
         for item in installs[:10]:
             if isinstance(item, dict):
                 name = (
@@ -373,6 +375,11 @@ def summarize_technographic(installs, total_count=None, contract_info=None):
                 )
                 if name:
                     summary["topTechnologies"].append(name)
+                intensity = item.get("intensity")
+                if isinstance(intensity, (int, float)):
+                    intensities.append(float(intensity))
+        if intensities:
+            summary["avgIntensity"] = sum(intensities) / len(intensities)
     return summary
 
 
@@ -535,11 +542,23 @@ async def prioritize_accounts(domains: list[str]) -> list[dict]:
                 badge = technographic.get("badge")
                 final = final_score(fit, badge)
 
+                days_to_renewal = None
+                if isinstance(contract_info, dict):
+                    days_to_renewal = contract_info.get("daysToRenewal")
+
                 return {
                     "domain": domain,
                     "company": firmographic.get("name"),
                     "score": round(final, 2),
                     "badge": badge,
+                    "employeeCount": firmographic.get("employeeCount"),
+                    "itSpend": firmographic.get("itSpend"),
+                    "companySpendAnnual": (spend or {}).get("annualSpend"),
+                    "techCount": technographic.get("count"),
+                    "techIntensity": technographic.get("avgIntensity"),
+                    "cloudMonthlySpend": (cloud_spend or {}).get("monthlySpend"),
+                    "faiAreas": (fai or {}).get("topAreas"),
+                    "daysToRenewal": days_to_renewal,
                     "reasons": build_reasons(
                         firmographic, technographic, cloud_spend, installs, spend, fai, contract_info
                     ),
