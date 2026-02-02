@@ -481,10 +481,6 @@ async def fetch_domain_summary(session, domain):
     (out_dir / f"{domain}_technographic.json").write_text(
         json.dumps(technographic_data, indent=2), encoding="utf-8"
     )
-    (out_dir / f"{domain}_cloud_spend.json").write_text(
-        json.dumps(cloud_spend_data, indent=2), encoding="utf-8"
-    )
-
     installs, total_count = infer_installs(technographic_data)
 
     top_products = []
@@ -508,6 +504,13 @@ async def fetch_domain_summary(session, domain):
             session, "company_fai", {"companyDomain": domain, "products": top_products}
         )
     fai = fai_summary(fai_data)
+
+    (out_dir / f"{domain}_cloud_spend.json").write_text(
+        json.dumps(cloud_spend_data, indent=2), encoding="utf-8"
+    )
+    (out_dir / f"{domain}_fai.json").write_text(
+        json.dumps(fai_data, indent=2), encoding="utf-8"
+    )
 
     return (
         summarize_firmographic(firmographic_data),
