@@ -9,6 +9,7 @@ Minimal Streamlit UI that calls **Phoenix MCP** to rank company domains by fit a
 - Paste a list of company domains
 - Get a ranked list with **score, badge, reasons, action**
 - (Optional) generate **LLM sales blurbs** via OpenRouter
+- Scores now incorporate **company_spend**, **company_fai**, and **company_contracts** signals
 
 ---
 
