@@ -511,6 +511,9 @@ async def fetch_domain_summary(session, domain):
     (out_dir / f"{domain}_fai.json").write_text(
         json.dumps(fai_data, indent=2), encoding="utf-8"
     )
+    (out_dir / f"{domain}_contracts.json").write_text(
+        json.dumps(contracts_data, indent=2), encoding="utf-8"
+    )
 
     return (
         summarize_firmographic(firmographic_data),
