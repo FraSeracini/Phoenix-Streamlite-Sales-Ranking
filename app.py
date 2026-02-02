@@ -50,7 +50,7 @@ st.caption("Paste company domains → get ranked accounts with reasons + next ac
 
 domains_text = st.text_area(
     "Company domains (one per line)",
-    value="snowflake.com\ndatabricks.com",
+    value="",
     height=120,
 )
 
