@@ -54,13 +54,19 @@ def parse_any_date(value):
 
 def trigger_badge(installs, contract_info=None):
     now = datetime.now(timezone.utc)
+
+    contract_score = 0.0
     if isinstance(contract_info, dict):
         days = contract_info.get("daysToRenewal")
         if isinstance(days, int):
-            if days <= 90:
-                return "Hot"
-            if days <= 180:
-                return "Warm"
+            if days <= 30:
+                contract_score = 1.0
+            elif days <= 90:
+                contract_score = 0.8
+            elif days <= 180:
+                contract_score = 0.5
+            elif days <= 365:
+                contract_score = 0.2
 
     best_delta_days = None
 
@@ -81,11 +87,20 @@ def trigger_badge(installs, contract_info=None):
                 if best_delta_days is None or delta < best_delta_days:
                     best_delta_days = delta
 
+    recency_score = 0.0
     if best_delta_days is None:
-        return "Cold"
-    if best_delta_days <= 30:
+        recency_score = 0.0
+    elif best_delta_days <= 30:
+        recency_score = 1.0
+    elif best_delta_days <= 120:
+        recency_score = 0.6
+    elif best_delta_days <= 365:
+        recency_score = 0.2
+
+    combined = (0.6 * contract_score) + (0.4 * recency_score)
+    if combined >= 0.75:
         return "Hot"
-    if best_delta_days <= 120:
+    if combined >= 0.4:
         return "Warm"
     return "Cold"
 
@@ -199,6 +214,7 @@ def spend_summary(data):
 
 def fai_summary(data):
     areas = []
+    keywords = ["it", "engineering", "data", "security", "cloud", "ai", "machine learning", "ml"]
     if isinstance(data, dict):
         for key in ["functionalAreas", "departments", "results", "data", "items"]:
             lst = data.get(key)
@@ -213,8 +229,10 @@ def fai_summary(data):
                     or item.get("department")
                     or item.get("function")
                 )
-                if name and name not in areas:
-                    areas.append(name)
+                if name:
+                    lowered = str(name).lower()
+                    if any(keyword in lowered for keyword in keywords) and name not in areas:
+                        areas.append(name)
 
     return {"areaCount": len(areas), "topAreas": areas[:3]}
 
