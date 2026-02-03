@@ -10,6 +10,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-4o-mini"
 
 
+# Generate a sales-ready blurb using OpenRouter.
 def llm_sales_blurb(account, api_key, model=DEFAULT_MODEL):
     prompt = f"""
 Write:
@@ -47,6 +48,7 @@ SCORING INPUTS:
 - Spend top categories: {account.get('spendTopCategories')}
 """
 
+    # OpenRouter request headers with API authentication.
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
         "model": model,
@@ -57,22 +59,26 @@ SCORING INPUTS:
         "temperature": 0.4,
     }
 
-    with httpx.Client(timeout=30) as client:
+    # Execute the request with a longer timeout for LLM responses.
+    with httpx.Client(timeout=60) as client:
         r = client.post(OPENROUTER_URL, headers=headers, json=payload)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
+# Streamlit page configuration.
 st.set_page_config(page_title="Account Prioritization Agent", layout="wide")
 
 st.title("Account Prioritization Agent")
 st.caption("Paste company domains → get ranked accounts with reasons + next action.")
 
+# Multiline input for company domains.
 domains_text = st.text_area(
     "Company domains (one per line)",
     value="",
     height=120,
 )
 
+# Optional LLM enrichment toggle.
 use_llm = st.checkbox("Improve output with LLM (OpenRouter)", value=False)
 openrouter_key = os.getenv("OPENROUTER_API_KEY")
 
@@ -85,6 +91,7 @@ if use_llm and not openrouter_key:
 if st.button("Prioritize"):
     domains = [d.strip() for d in domains_text.splitlines() if d.strip()]
 
+    # Run the enrichment pipeline.
     with st.spinner("Running account prioritization..."):
         results = asyncio.run(prioritize_accounts(domains))
 

@@ -6,8 +6,9 @@ from pathlib import Path
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+# MCP endpoint for Phoenix services.
 PHOENIX_URL = "https://phoenix.hginsights.com/api/ai/phx_185c0d78b3d439897dc6e8cd658c2f6765b3c83a834e503e762107198bb4409b/mcp"
-MAX_RESULTS = 200
+# Known cloud vendors used for spend classification.
 CLOUD_VENDOR_ALLOWLIST = {
     "Amazon Web Services",
     "AWS",
@@ -24,6 +25,7 @@ CLOUD_VENDOR_ALLOWLIST = {
 }
 
 
+# Extract JSON payload from MCP response blocks.
 def extract_json_text(res_content):
     for block in res_content:
         if getattr(block, "type", None) == "text" and hasattr(block, "text"):
@@ -35,6 +37,7 @@ def extract_json_text(res_content):
     raise ValueError("No JSON found in MCP response content.")
 
 
+# Call a tool and return JSON, swallowing errors.
 async def safe_tool_call(session, tool_name, params):
     try:
         res = await session.call_tool(tool_name, params)
@@ -43,6 +46,7 @@ async def safe_tool_call(session, tool_name, params):
         return {}
 
 
+# Parse ISO timestamps and normalize to UTC.
 def parse_any_date(value):
     if not value or not isinstance(value, str):
         return None
@@ -52,6 +56,7 @@ def parse_any_date(value):
         return None
 
 
+# Normalize numeric values from strings or numbers.
 def parse_amount(value):
     if isinstance(value, (int, float)):
         return float(value)
@@ -64,9 +69,11 @@ def parse_amount(value):
     return None
 
 
+# Compute engagement badge based on contract and recency signals.
 def trigger_badge(installs, contract_info=None):
     now = datetime.now(timezone.utc)
 
+    # Contract renewal proximity score.
     contract_score = 0.0
     if isinstance(contract_info, dict):
         days = contract_info.get("daysToRenewal")
@@ -80,6 +87,7 @@ def trigger_badge(installs, contract_info=None):
             elif days <= 365:
                 contract_score = 0.3
 
+    # Track most recent verification activity.
     best_delta_days = None
 
     date_fields = [
@@ -99,6 +107,7 @@ def trigger_badge(installs, contract_info=None):
                 if best_delta_days is None or delta < best_delta_days:
                     best_delta_days = delta
 
+    # Recency score from latest observed activity.
     recency_score = 0.0
     if best_delta_days is None:
         recency_score = 0.0
@@ -109,14 +118,16 @@ def trigger_badge(installs, contract_info=None):
     elif best_delta_days <= 365:
         recency_score = 0.2
 
+    # Weighted mix of contract and recency signals.
     combined = (0.4 * contract_score) + (0.6 * recency_score)
-    if combined >= 0.65:
+    if combined >= 0.85:
         return "Hot"
-    if combined >= 0.35:
+    if combined >= 0.5:
         return "Warm"
     return "Cold"
 
 
+# Infer installs list and total count from varied API shapes.
 def infer_installs(data):
     installs = data
     total_count = None
@@ -137,6 +148,7 @@ def infer_installs(data):
     return installs, total_count
 
 
+# Summarize cloud spend and top vendors.
 def cloud_spend_summary(data):
     if not isinstance(data, dict):
         return {"monthlySpend": 0, "vendorCount": 0, "servicesCount": 0, "topCloudServices": []}
@@ -146,6 +158,7 @@ def cloud_spend_summary(data):
     vendor_count = 0
     services_count = len(services) if isinstance(services, list) else 0
 
+    # Track spend per cloud vendor.
     spend_by_vendor = {}
 
     if isinstance(services, list):
@@ -157,9 +170,11 @@ def cloud_spend_summary(data):
                         continue
                     vendor_count += 1
 
+                    # Normalize vendor name for consistent grouping.
                     vname_raw = vendor.get("vendorName") or vendor.get("name") or "Unknown"
                     vname = str(vname_raw)
                     vn = vname.lower()
+                    # Check if vendor matches known cloud providers.
                     is_cloud = any(k.lower() in vn for k in CLOUD_VENDOR_ALLOWLIST)
 
                     spend = vendor.get("estimatedMonthlySpend") or 0
@@ -168,6 +183,7 @@ def cloud_spend_summary(data):
                         if is_cloud:
                             spend_by_vendor[vname] = spend_by_vendor.get(vname, 0.0) + float(spend)
 
+    # Pick the top three cloud vendors by spend.
     top_vendors = sorted(spend_by_vendor.items(), key=lambda x: x[1], reverse=True)[:3]
     if not top_vendors:
         top_vendors = [("Unknown cloud provider", 0.0)]
@@ -180,6 +196,7 @@ def cloud_spend_summary(data):
     }
 
 
+# Summarize IT spend and top categories.
 def spend_summary(data):
     annual_spend = 0.0
     top_categories = []
@@ -198,6 +215,7 @@ def spend_summary(data):
             if isinstance(value, (int, float)):
                 annual_spend = max(annual_spend, float(value))
 
+        # Search for category breakdowns in multiple shapes.
         category_lists = [
             data.get("categories"),
             data.get("categorySpend"),
@@ -234,6 +252,7 @@ def spend_summary(data):
     return {"annualSpend": annual_spend, "topCategories": top_categories}
 
 
+# Summarize functional area coverage.
 def fai_summary(data):
     areas = []
     keywords = ["it", "engineering", "data", "security", "cloud", "ai", "machine learning", "ml"]
@@ -251,14 +270,19 @@ def fai_summary(data):
                     or item.get("department")
                     or item.get("function")
                 )
-                if name:
-                    lowered = str(name).lower()
-                    if any(keyword in lowered for keyword in keywords) and name not in areas:
-                        areas.append(name)
+                detected_products = item.get("detectedProducts")
+                if not name:
+                    continue
+                if not isinstance(detected_products, list) or not detected_products:
+                    continue
+                lowered = str(name).lower()
+                if any(keyword in lowered for keyword in keywords) and name not in areas:
+                    areas.append(name)
 
     return {"areaCount": len(areas), "topAreas": areas[:3]}
 
 
+# Extract nearest future contract renewal date.
 def contract_signal(data):
     date_fields = [
         "renewalDate",
@@ -301,9 +325,28 @@ def contract_signal(data):
     return {"daysToRenewal": days}
 
 
+# Build a compact list of top selling reasons.
 def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai, contract_info):
     reasons = []
 
+    # 1) Cloud spend
+    monthly = (cloud_spend or {}).get("monthlySpend") or 0
+    if monthly:
+        reasons.append(f"Cloud spend signal (~${monthly/1_000_000:.2f}M/mo)")
+
+    # 2) Top IT spend categories
+    top_categories = (spend or {}).get("topCategories") or []
+    if top_categories:
+        reasons.append(f"Top IT spend areas: {', '.join(top_categories)}")
+
+    # 3) Badge signal
+    badge = technographic.get("badge")
+    if badge == "Hot":
+        reasons.append("Recent tech verification activity (Hot)")
+    elif badge == "Warm":
+        reasons.append("Some recent tech activity (Warm)")
+
+    # Additional signals (lower priority)
     if isinstance(contract_info, dict):
         days = contract_info.get("daysToRenewal")
         if isinstance(days, int) and days <= 180:
@@ -313,10 +356,6 @@ def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai
     if top_areas:
         reasons.append(f"Active in functions: {', '.join(top_areas)}")
 
-    top_categories = (spend or {}).get("topCategories") or []
-    if top_categories:
-        reasons.append(f"Top IT spend areas: {', '.join(top_categories)}")
-
     top = technographic.get("topTechnologies") or []
     if top:
         reasons.append(f"Key stack present: {top[0]}")
@@ -325,19 +364,9 @@ def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai
     if industry:
         reasons.append(f"Industry fit: {industry}")
 
-    monthly = (cloud_spend or {}).get("monthlySpend") or 0
-    if monthly:
-        reasons.append(f"Cloud spend signal (~${monthly/1_000_000:.2f}M/mo)")
-
     annual_spend = (spend or {}).get("annualSpend") or 0
     if annual_spend:
         reasons.append(f"IT spend signal (~${annual_spend/1_000_000:.0f}M/yr)")
-
-    badge = technographic.get("badge")
-    if badge == "Hot":
-        reasons.append("Recent tech verification activity (Hot)")
-    elif badge == "Warm":
-        reasons.append("Some recent tech activity (Warm)")
 
     top_vendors = (cloud_spend or {}).get("topCloudServices") or []
     if top_vendors:
@@ -346,13 +375,14 @@ def build_reasons(firmographic, technographic, cloud_spend, installs, spend, fai
     return list(dict.fromkeys(reasons))[:3]
 
 
+# Recommend next action based on badge and spend signals.
 def recommended_action(technographic, cloud_spend, contract_info=None):
     badge = technographic.get("badge")
     top_vendors = (cloud_spend or {}).get("topCloudServices") or []
 
     if isinstance(contract_info, dict):
         days = contract_info.get("daysToRenewal")
-        if isinstance(days, int) and days <= 90:
+        if isinstance(days, int) and days <= 80:
             return "Engage ahead of contract renewal window"
 
     if badge == "Hot":
@@ -366,6 +396,7 @@ def recommended_action(technographic, cloud_spend, contract_info=None):
     return "Deprioritize for now"
 
 
+# Extract key firmographic fields.
 def summarize_firmographic(data):
     if not isinstance(data, dict):
         return {}
@@ -379,6 +410,7 @@ def summarize_firmographic(data):
     }
 
 
+# Summarize technographic installs and intensity.
 def summarize_technographic(installs, total_count=None, contract_info=None):
     summary = {
         "count": None,
@@ -393,6 +425,7 @@ def summarize_technographic(installs, total_count=None, contract_info=None):
             summary["count"] = total_count
         else:
             summary["count"] = raw_count
+        # Limit top technologies to the first 10 items.
         intensities = []
         for item in installs[:10]:
             if isinstance(item, dict):
@@ -412,10 +445,12 @@ def summarize_technographic(installs, total_count=None, contract_info=None):
     return summary
 
 
+# Compute a weighted fit score from multiple signals.
 def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
     employees = firmographic.get("employeeCount") or 0
     it_spend = firmographic.get("itSpend") or 0
 
+    # Log-scaled scoring to smooth large values.
     def log_score(value, max_points, floor=1):
         if value <= 0:
             return 0
@@ -465,6 +500,7 @@ def fit_score(firmographic, installs, cloud_spend=None, spend=None, fai=None):
     )
 
 
+# Apply badge boost to base fit.
 def final_score(fit, badge):
     boost = 0
     if badge == "Hot":
@@ -474,28 +510,35 @@ def final_score(fit, badge):
     return fit + boost
 
 
+# Fetch and summarize all data sources for a domain.
 async def fetch_domain_summary(session, domain):
+    # Firmographic data.
     firmographic_res = await session.call_tool("company_firmographic", {"companyDomain": domain})
     firmographic_data = extract_json_text(firmographic_res.content)
 
+    # Technographic data (no explicit limit).
     technographic_res = await session.call_tool(
         "company_technographic",
-        {"companyDomain": domain, "limit": MAX_RESULTS, "maxResults": MAX_RESULTS},
+        {"companyDomain": domain},
     )
     technographic_data = extract_json_text(technographic_res.content)
 
+    # Cloud spend data.
     cloud_spend_res = await session.call_tool("company_cloud_spend", {"companyDomain": domain})
     cloud_spend_data = extract_json_text(cloud_spend_res.content)
     cloud_spend = cloud_spend_summary(cloud_spend_data)
 
+    # IT spend data.
     spend_data = await safe_tool_call(session, "company_spend", {"companyDomain": domain})
     spend = spend_summary(spend_data)
 
+    # Contract data.
     contracts_data = await safe_tool_call(
         session, "company_contracts", {"companyDomain": domain}
     )
     contract_info = contract_signal(contracts_data)
 
+    # Persist raw responses for inspection.
     out_dir = Path("out")
     out_dir.mkdir(exist_ok=True)
     (out_dir / f"{domain}_firmographic.json").write_text(
@@ -509,26 +552,8 @@ async def fetch_domain_summary(session, domain):
     )
     installs, total_count = infer_installs(technographic_data)
 
-    top_products = []
-    if isinstance(installs, list):
-        for item in installs:
-            if not isinstance(item, dict):
-                continue
-            name = (
-                item.get("productName")
-                or item.get("technologyName")
-                or item.get("name")
-            )
-            if name and name not in top_products:
-                top_products.append(name)
-            if len(top_products) >= 3:
-                break
-
-    fai_data = {}
-    if top_products:
-        fai_data = await safe_tool_call(
-            session, "company_fai", {"companyDomain": domain, "products": top_products}
-        )
+    # Functional area insights (filtered by detected products in fai_summary).
+    fai_data = await safe_tool_call(session, "company_fai", {"companyDomain": domain})
     fai = fai_summary(fai_data)
 
     (out_dir / f"{domain}_cloud_spend.json").write_text(
@@ -552,10 +577,12 @@ async def fetch_domain_summary(session, domain):
     )
 
 
+# Orchestrate multi-domain enrichment and ranking.
 async def prioritize_accounts(domains: list[str]) -> list[dict]:
     async with streamable_http_client(PHOENIX_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
+            # Compose final output record for a domain.
             def build_result(domain, firmographic, technographic, installs, cloud_spend, spend, fai, contract_info):
                 fit = fit_score(firmographic, installs, cloud_spend, spend, fai)
                 badge = technographic.get("badge")
@@ -588,6 +615,7 @@ async def prioritize_accounts(domains: list[str]) -> list[dict]:
                     "action": recommended_action(technographic, cloud_spend, contract_info),
                 }
 
+            # Collect successful domain results.
             clean = []
             for domain in domains:
                 last_exc = None
